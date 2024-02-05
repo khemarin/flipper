@@ -11,16 +11,16 @@
 
 @property(nonatomic, strong, readonly) NSArray<NSString*>* structureColumns;
 @property(nonatomic, strong, readonly)
-    NSArray<NSArray<NSString*>*>* structureValues;
+    NSArray<NSArray<id>*>* structureValues;
 @property(nonatomic, strong, readonly) NSArray<NSString*>* indexesColumns;
 @property(nonatomic, strong, readonly)
-    NSArray<NSArray<NSString*>*>* indexesValues;
+    NSArray<NSArray<id>*>* indexesValues;
 
 - (instancetype)
     initWithStructureColumns:(NSArray<NSString*>*)structureColumns
-             structureValues:(NSArray<NSArray<NSString*>*>*)structureValues
+             structureValues:(NSArray<NSArray<id>*>*)structureValues
               indexesColumns:(NSArray<NSString*>*)indexesColumns
-               indexesValues:(NSArray<NSArray<NSString*>*>*)indexesValues;
+               indexesValues:(NSArray<NSArray<id>*>*)indexesValues;
 
 @end
 

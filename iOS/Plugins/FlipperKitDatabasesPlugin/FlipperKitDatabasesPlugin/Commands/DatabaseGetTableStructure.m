@@ -11,9 +11,9 @@
 
 - (instancetype)
     initWithStructureColumns:(NSArray<NSString*>*)structureColumns
-             structureValues:(NSArray<NSArray<NSString*>*>*)structureValues
+             structureValues:(NSArray<NSArray<id>*>*)structureValues
               indexesColumns:(NSArray<NSString*>*)indexesColumns
-               indexesValues:(NSArray<NSArray<NSString*>*>*)indexesValues {
+               indexesValues:(NSArray<NSArray<id>*>*)indexesValues {
   self = [super init];
   if (self) {
     _structureColumns = [structureColumns copy];
