@@ -102,6 +102,18 @@ Pod::Spec.new do |spec|
     ss.public_header_files = 'iOS/Plugins/FlipperKitLayoutPlugin/FlipperKitLayoutTextSearchable/FKTextSearchable.h'
   end
 
+  spec.subspec 'FlipperKitDatabasesPlugin' do |ss|
+    ss.header_dir = 'FlipperKitDatabasesPlugin'
+    ss.compiler_flags = folly_compiler_flags
+    ss.public_header_files = 'iOS/Plugins/FlipperKitDatabasesPlugin/FlipperKitDatabasesPlugin/FlipperKitDatabasesPlugin.h',
+                            'iOS/Plugins/FlipperKitDatabasesPlugin/FlipperKitDatabasesPlugin/DatabaseDescriptor.h',
+                            'iOS/Plugins/FlipperKitDatabasesPlugin/FlipperKitDatabasesPlugin/DatabaseDriver.h'
+    ss.source_files = 'iOS/Plugins/FlipperKitDatabasesPlugin/FlipperKitDatabasesPlugin/**/**/*.{h,mm,m}'
+    ss.private_header_files = 'iOS/Plugins/FlipperKitDatabasesPlugin/FlipperKitDatabasesPlugin/Commands/*.h',
+                            'iOS/Plugins/FlipperKitDatabasesPlugin/FlipperKitDatabasesPlugin/Mock/*.h'
+    ss.pod_target_xcconfig = {"HEADER_SEARCH_PATHS" => "\"$(PODS_ROOT)\"/Headers/Private/FlipperKit/**", "ONLY_ACTIVE_ARCH": "YES"}
+  end
+
   spec.subspec 'FlipperKitLayoutHelpers' do |ss|
     ss.header_dir = 'FlipperKitLayoutHelpers'
     ss.dependency 'FlipperKit/Core'
