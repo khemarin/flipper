@@ -25,9 +25,54 @@
 }
 
 // MARK: - DatabaseDriver implementations
-- (DatabaseExecuteSqlResponse *)executeSQL:(NSString *)sql {
-    // Not supported. Paramater should include DatabaseDescriptor
-    return nil;
+- (DatabaseExecuteSqlResponse *)executeSQL:(NSString *)sql withDatabaseDescriptor:(id<DatabaseDescriptor>)databaseDescriptor {
+    if (!sql) {
+        return nil;
+    }
+    NSArray<NSString *> *supportedQuery = @[@"SELECT", @"EXPLAINED", @"PRAGMA"];
+    NSString *keyword = [self getFirstWord:sql];
+    if (![supportedQuery containsObject:keyword]) {
+        return nil;
+    }
+    SqliteDefaultDescriptor *sqliteDescriptor = [self sqliteDescriptor:databaseDescriptor];
+    FMDatabase *db = sqliteDescriptor.database;
+    if (!sqliteDescriptor || !db) {
+        return nil;
+    }
+    [self openDatabase:db];
+    
+    FMResultSet *dataResult = [db executeQuery:sql];
+    NSMutableArray *columnNames = [NSMutableArray array];
+    NSMutableArray<NSArray *> *rows = [NSMutableArray array];
+    int columnCount = [dataResult columnCount];
+    
+    if ([dataResult next]) {
+        for (int i = 0; i < columnCount; i++) {
+            NSString *columnName = [dataResult columnNameForIndex:i];
+            if (columnName) {
+                [columnNames addObject:columnName];
+            } else {
+                [columnNames addObject:[NSNull null]];
+            }
+        }
+    }
+    
+    do {
+        NSMutableArray *row = [NSMutableArray array];
+        for (int i = 0; i < columnCount; i++) {
+            id field = [dataResult objectForColumnIndex:i];
+            if (field) {
+                [row addObject:field];
+            } else {
+                [row addObject:[NSNull null]];
+            }
+        }
+        [rows addObject:row];
+    } while ([dataResult next]);
+    
+    [db close];
+    
+    return [[DatabaseExecuteSqlResponse alloc] initWithType:@"select" columns:columnNames values:rows insertedId:nil affectedCount:0];
 }
 
 - (NSArray<id<DatabaseDescriptor>> *)getDatabases { 
@@ -58,20 +103,30 @@
     }
     
     FMResultSet *dataResult = [db executeQuery:query];
-    NSMutableArray<NSString *> *columnNames = [NSMutableArray array];
-    NSMutableArray<NSArray<id> *> *rows = [NSMutableArray array];
+    NSMutableArray *columnNames = [NSMutableArray array];
+    NSMutableArray<NSArray *> *rows = [NSMutableArray array];
     int columnCount = [dataResult columnCount];
     
     if ([dataResult next]) {
         for (int i = 0; i < columnCount; i++) {
-            [columnNames addObject:[dataResult columnNameForIndex:i]];
+            NSString *columnName = [dataResult columnNameForIndex:i];
+            if (columnName) {
+                [columnNames addObject:columnName];
+            } else {
+                [columnNames addObject:[NSNull null]];
+            }
         }
     }
     
     do {
-        NSMutableArray<id> *row = [NSMutableArray array];
+        NSMutableArray *row = [NSMutableArray array];
         for (int i = 0; i < columnCount; i++) {
-            [row addObject:[dataResult objectForColumnIndex:i]];
+            id field = [dataResult objectForColumnIndex:i];
+            if (field) {
+                [row addObject:field];
+            } else {
+                [row addObject:[NSNull null]];
+            }
         }
         [rows addObject:row];
     } while ([dataResult next]);
@@ -109,9 +164,14 @@
     [self openDatabase:db];
     NSString *statement = [NSString stringWithFormat:@"SELECT name FROM %@ WHERE type IN ('table', 'view')", _masterTable];
     FMResultSet *resultSet = [db executeQuery:statement];
-    NSMutableArray<NSString *> *tables = [NSMutableArray array];
+    NSMutableArray *tables = [NSMutableArray array];
     while ([resultSet next]) {
-        [tables addObject:[resultSet stringForColumnIndex:0]];
+        NSString *tableName = [resultSet stringForColumnIndex:0];
+        if (tableName) {
+            [tables addObject:tableName];
+        } else {
+            [tables addObject:[NSNull null]];
+        }
     }
     [db close];
     return tables;
@@ -133,7 +193,7 @@
     FMResultSet *indexesResult = [db executeQuery:indexesStatement];
     
     NSArray<NSString *> *structureColumns = @[@"column_name", @"data_type", @"nullable", @"default", @"primary_key", @"foreign_key"];
-    NSMutableArray<NSArray<id> *> *structureValues = [NSMutableArray array];
+    NSMutableArray<NSArray *> *structureValues = [NSMutableArray array];
     NSMutableDictionary<NSString *, NSString*> *foreignKeyValues = [NSMutableDictionary dictionary];
     
     while ([foreignKeyResult next]) {
@@ -146,29 +206,34 @@
         NSString *columnName = [structureResult stringForColumn:@"name"];
         NSString *foreignKey = [foreignKeyValues objectForKey:columnName];
         
-        NSArray<id> *fieldStructureValue = @[
-            columnName,
-            [structureResult stringForColumn:@"type"],
+        NSArray *fieldStructureValue = @[
+            columnName ?: [NSNull null],
+            [structureResult stringForColumn:@"type"] ?: [NSNull null],
             [NSNumber numberWithBool:[structureResult intForColumn:@"notnull"] == 0], // true if Nullable, false otherwise
-            [structureResult objectForColumn:@"dflt_value"],
+            [structureResult objectForColumn:@"dflt_value"] ?: [NSNull null],
             [NSNumber numberWithBool:[structureResult intForColumn:@"pk"] == 1],
-            foreignKey
+            foreignKey ?: [NSNull null]
         ];
         [structureValues addObject:fieldStructureValue];
     }
     
     NSArray<NSString *> *indexesColumns = @[@"index_name", @"unique", @"indexed_column_name"];
-    NSMutableArray<NSArray<id> *> *indexesValue = [NSMutableArray array];
+    NSMutableArray<NSArray *> *indexesValue = [NSMutableArray array];
     while ([indexesResult next]) {
         NSMutableArray *indexedColumnNames = [NSMutableArray array];
         NSString *indexName = [indexesResult stringForColumn:@"name"];
         NSString *queryIndexName = [NSString stringWithFormat:@"PRAGMA index_info(%@)", indexName];
         FMResultSet *indexInfoResult = [db executeQuery:queryIndexName];
         while ([indexInfoResult next]) {
-            [indexedColumnNames addObject:[indexInfoResult stringForColumn:@"name"]];
+            NSString *indexInfoName = [indexInfoResult stringForColumn:@"name"];
+            if (indexInfoName) {
+                [indexedColumnNames addObject:indexInfoName];
+            } else {
+                [indexedColumnNames addObject:[NSNull null]];
+            }
         }
         [indexesValue addObject:@[
-            indexName,
+            indexName ?: [NSNull null],
             [NSNumber numberWithBool:[indexesResult intForColumn:@"unique"] == 1],
             [indexedColumnNames componentsJoinedByString:@","]
         ]];
