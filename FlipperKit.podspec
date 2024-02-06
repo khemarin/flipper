@@ -16,7 +16,7 @@ Pod::Spec.new do |spec|
   spec.source = { :git => 'https://github.com/facebook/flipper.git',
                   :tag=> "v"+flipperkit_version }
   spec.module_name = 'FlipperKit'
-  spec.platforms = { :ios => "11.0" }
+  spec.platforms = { :ios => "13.0" }
   spec.default_subspecs = "Core"
 
   # This subspec is necessary since FBDefines.h is imported as <FBDefines/FBDefines.h>
@@ -105,9 +105,12 @@ Pod::Spec.new do |spec|
   spec.subspec 'FlipperKitDatabasesPlugin' do |ss|
     ss.header_dir = 'FlipperKitDatabasesPlugin'
     ss.compiler_flags = folly_compiler_flags
+    ss.dependency 'FMDB', '~> 2.7.5'
     ss.public_header_files = 'iOS/Plugins/FlipperKitDatabasesPlugin/FlipperKitDatabasesPlugin/FlipperKitDatabasesPlugin.h',
                             'iOS/Plugins/FlipperKitDatabasesPlugin/FlipperKitDatabasesPlugin/DatabaseDescriptor.h',
-                            'iOS/Plugins/FlipperKitDatabasesPlugin/FlipperKitDatabasesPlugin/DatabaseDriver.h'
+                            'iOS/Plugins/FlipperKitDatabasesPlugin/FlipperKitDatabasesPlugin/DatabaseDriver.h',
+                            'iOS/Plugins/FlipperKitDatabasesPlugin/FlipperKitDatabasesPlugin/Impl/SqliteDefaultDescriptor.h',
+                            'iOS/Plugins/FlipperKitDatabasesPlugin/FlipperKitDatabasesPlugin/Impl/SqliteDefaultDriver.h'
     ss.source_files = 'iOS/Plugins/FlipperKitDatabasesPlugin/FlipperKitDatabasesPlugin/**/**/*.{h,mm,m}'
     ss.private_header_files = 'iOS/Plugins/FlipperKitDatabasesPlugin/FlipperKitDatabasesPlugin/Commands/*.h',
                             'iOS/Plugins/FlipperKitDatabasesPlugin/FlipperKitDatabasesPlugin/Mock/*.h'

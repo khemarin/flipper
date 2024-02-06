@@ -1,0 +1,209 @@
+#import "SqliteDefaultDriver.h"
+#include <Foundation/Foundation.h>
+#import "DatabaseExecuteSql.h"
+#import "DatabaseGetTableData.h"
+#import "DatabaseGetTableInfo.h"
+#import "DatabaseGetTableStructure.h"
+#import "DatabaseDescriptor.h"
+#import <FMDB/FMDB.h>
+#import "sqlite3.h"
+
+@interface SqliteDefaultDriver()
+@property(nonatomic, strong) NSArray<SqliteDefaultDescriptor *> *databaseDescriptors;
+@property(nonatomic, strong) NSString *masterTable;
+@end
+
+@implementation SqliteDefaultDriver
+
+- (instancetype)initWithDatabaseDescriptors:(NSArray<SqliteDefaultDescriptor *> *)databaseDescriptors {
+    self = [super init];
+    if (self) {
+        _masterTable = @"sqlite_master";
+        _databaseDescriptors = databaseDescriptors;
+    }
+    return self;
+}
+
+// MARK: - DatabaseDriver implementations
+- (DatabaseExecuteSqlResponse *)executeSQL:(NSString *)sql {
+    // Not supported. Paramater should include DatabaseDescriptor
+    return nil;
+}
+
+- (NSArray<id<DatabaseDescriptor>> *)getDatabases { 
+    return _databaseDescriptors;
+}
+
+- (DatabaseGetTableDataResponse *)getTableDataWithDatabaseDescriptor:(id<DatabaseDescriptor>)databaseDescriptor forTable:(NSString *)tableName order:(NSString *)order reverse:(BOOL)reverse start:(NSInteger)start count:(NSInteger)count {
+    SqliteDefaultDescriptor *sqliteDescriptor = [self sqliteDescriptor:databaseDescriptor];
+    FMDatabase *db = sqliteDescriptor.database;
+    if (!sqliteDescriptor || !db || !tableName) {
+        return nil;
+    }
+    [self openDatabase:db];
+    
+    NSString *orderBy = order != NULL ? [NSString stringWithFormat:@"%@ %@", order, reverse ? @"DESC" : @"ASC"] : NULL;
+    NSString *query;
+    if (orderBy) {
+        query = [NSString stringWithFormat:@"SELECT * FROM %@ ORDER BY %@ LIMIT %ld, %ld", tableName, orderBy, start, count];
+    } else {
+        query = [NSString stringWithFormat:@"SELECT * FROM %@ LIMIT %ld, %ld", tableName, start, count];
+    }
+    
+    NSString *countQuery = [NSString stringWithFormat:@"SELECT COUNT(*) AS count FROM %@", tableName];
+    FMResultSet *countResult = [db executeQuery:countQuery];
+    NSUInteger total = 0;
+    if ([countResult next]) {
+        total = [countResult longLongIntForColumnIndex:0];
+    }
+    
+    FMResultSet *dataResult = [db executeQuery:query];
+    NSMutableArray<NSString *> *columnNames = [NSMutableArray array];
+    NSMutableArray<NSArray<id> *> *rows = [NSMutableArray array];
+    int columnCount = [dataResult columnCount];
+    
+    if ([dataResult next]) {
+        for (int i = 0; i < columnCount; i++) {
+            [columnNames addObject:[dataResult columnNameForIndex:i]];
+        }
+    }
+    
+    do {
+        NSMutableArray<id> *row = [NSMutableArray array];
+        for (int i = 0; i < columnCount; i++) {
+            [row addObject:[dataResult objectForColumnIndex:i]];
+        }
+        [rows addObject:row];
+    } while ([dataResult next]);
+    
+    [db close];
+    return [[DatabaseGetTableDataResponse alloc] initWithColumns:columnNames
+                                                          values:rows
+                                                           start:start
+                                                           count:count
+                                                           total:total];
+}
+
+- (DatabaseGetTableInfoResponse *)getTableInfoWithDatabaseDescriptor:(id<DatabaseDescriptor>)databaseDescriptor forTable:(NSString *)tableName {
+    SqliteDefaultDescriptor *sqliteDescriptor = [self sqliteDescriptor:databaseDescriptor];
+    FMDatabase *db = sqliteDescriptor.database;
+    if (!sqliteDescriptor || !db || !tableName) {
+        return nil;
+    }
+    [self openDatabase:db];
+    NSString *statement = [NSString stringWithFormat:@"SELECT sql FROM %@ WHERE name = %@", _masterTable, tableName];
+    FMResultSet *resultSet = [db executeQuery:statement];
+    if ([resultSet next]) {
+        return [[DatabaseGetTableInfoResponse alloc] initWithDefinition:[resultSet stringForColumnIndex:0]];
+    }
+    [db close];
+    return nil;
+}
+
+- (NSArray<NSString *> *)getTableNames:(id<DatabaseDescriptor>)databaseDescriptor {
+    SqliteDefaultDescriptor *sqliteDescriptor = [self sqliteDescriptor:databaseDescriptor];
+    FMDatabase *db = sqliteDescriptor.database;
+    if (!sqliteDescriptor || !db) {
+        return nil;
+    }
+    [self openDatabase:db];
+    NSString *statement = [NSString stringWithFormat:@"SELECT name FROM %@ WHERE type IN ('table', 'view')", _masterTable];
+    FMResultSet *resultSet = [db executeQuery:statement];
+    NSMutableArray<NSString *> *tables = [NSMutableArray array];
+    while ([resultSet next]) {
+        [tables addObject:[resultSet stringForColumnIndex:0]];
+    }
+    [db close];
+    return tables;
+}
+
+- (DatabaseGetTableStructureResponse *)getTableStructureWithDatabaseDescriptor:(id<DatabaseDescriptor>)databaseDescriptor forTable:(NSString *)tableName {
+    SqliteDefaultDescriptor *sqliteDescriptor = [self sqliteDescriptor:databaseDescriptor];
+    FMDatabase *db = sqliteDescriptor.database;
+    if (!sqliteDescriptor || !db || !tableName) {
+        return nil;
+    }
+    [self openDatabase:db];
+    
+    NSString *structureStatement = [NSString stringWithFormat:@"PRAGMA table_info(%@)", tableName];
+    NSString *foreignKeysStatement = [NSString stringWithFormat:@"PRAGMA foreign_key_list(%@)", tableName];
+    NSString *indexesStatement = [NSString stringWithFormat:@"PRAGMA index_list(%@)", tableName];
+    FMResultSet *structureResult = [db executeQuery:structureStatement];
+    FMResultSet *foreignKeyResult = [db executeQuery:foreignKeysStatement];
+    FMResultSet *indexesResult = [db executeQuery:indexesStatement];
+    
+    NSArray<NSString *> *structureColumns = @[@"column_name", @"data_type", @"nullable", @"default", @"primary_key", @"foreign_key"];
+    NSMutableArray<NSArray<id> *> *structureValues = [NSMutableArray array];
+    NSMutableDictionary<NSString *, NSString*> *foreignKeyValues = [NSMutableDictionary dictionary];
+    
+    while ([foreignKeyResult next]) {
+        NSString *foreignKeyKey = [foreignKeyResult stringForColumn:@"from"];
+        NSString *foreignKeyValue = [NSString stringWithFormat:@"%@(%@)", [foreignKeyResult stringForColumn:@"table"], [foreignKeyResult stringForColumn:@"to"]];
+        [foreignKeyValues setObject:foreignKeyValue forKey:foreignKeyKey];
+    }
+    
+    while ([structureResult next]) {
+        NSString *columnName = [structureResult stringForColumn:@"name"];
+        NSString *foreignKey = [foreignKeyValues objectForKey:columnName];
+        
+        NSArray<id> *fieldStructureValue = @[
+            columnName,
+            [structureResult stringForColumn:@"type"],
+            [NSNumber numberWithBool:[structureResult intForColumn:@"notnull"] == 0], // true if Nullable, false otherwise
+            [structureResult objectForColumn:@"dflt_value"],
+            [NSNumber numberWithBool:[structureResult intForColumn:@"pk"] == 1],
+            foreignKey
+        ];
+        [structureValues addObject:fieldStructureValue];
+    }
+    
+    NSArray<NSString *> *indexesColumns = @[@"index_name", @"unique", @"indexed_column_name"];
+    NSMutableArray<NSArray<id> *> *indexesValue = [NSMutableArray array];
+    while ([indexesResult next]) {
+        NSMutableArray *indexedColumnNames = [NSMutableArray array];
+        NSString *indexName = [indexesResult stringForColumn:@"name"];
+        NSString *queryIndexName = [NSString stringWithFormat:@"PRAGMA index_info(%@)", indexName];
+        FMResultSet *indexInfoResult = [db executeQuery:queryIndexName];
+        while ([indexInfoResult next]) {
+            [indexedColumnNames addObject:[indexInfoResult stringForColumn:@"name"]];
+        }
+        [indexesValue addObject:@[
+            indexName,
+            [NSNumber numberWithBool:[indexesResult intForColumn:@"unique"] == 1],
+            [indexedColumnNames componentsJoinedByString:@","]
+        ]];
+    }
+    
+    [db close];
+    return [[DatabaseGetTableStructureResponse alloc] initWithStructureColumns:structureColumns
+                                                               structureValues:structureValues
+                                                                indexesColumns:indexesColumns
+                                                                 indexesValues:indexesValue];
+}
+
+// MARK: - Private helpers
+- (NSString *)getFirstWord:(NSString *)sql {
+    NSString *trimmedSql = [sql stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    NSArray *words = [trimmedSql componentsSeparatedByString:@" "];
+    if (words.count > 0) {
+        return words[0];
+    }
+    return nil;
+}
+
+- (SqliteDefaultDescriptor *)sqliteDescriptor:(id<DatabaseDescriptor>)descriptor {
+    for (int i = 0; i < _databaseDescriptors.count; i++) {
+        if ([[_databaseDescriptors[i] name] isEqualToString:[descriptor name]]) {
+            return _databaseDescriptors[i];
+        }
+    }
+    return nil;
+}
+
+- (void)openDatabase:(FMDatabase *)database {
+    if (![database openWithFlags:SQLITE_OPEN_READONLY]) {
+        NSLog(@"cannot open db");
+    }
+}
+
+@end
