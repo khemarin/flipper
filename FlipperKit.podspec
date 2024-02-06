@@ -110,10 +110,11 @@ Pod::Spec.new do |spec|
                             'iOS/Plugins/FlipperKitDatabasesPlugin/FlipperKitDatabasesPlugin/DatabaseDescriptor.h',
                             'iOS/Plugins/FlipperKitDatabasesPlugin/FlipperKitDatabasesPlugin/DatabaseDriver.h',
                             'iOS/Plugins/FlipperKitDatabasesPlugin/FlipperKitDatabasesPlugin/Impl/SqliteDefaultDescriptor.h',
-                            'iOS/Plugins/FlipperKitDatabasesPlugin/FlipperKitDatabasesPlugin/Impl/SqliteDefaultDriver.h'
+                            'iOS/Plugins/FlipperKitDatabasesPlugin/FlipperKitDatabasesPlugin/Impl/SqliteDefaultDriver.h',
+                            'iOS/Plugins/FlipperKitDatabasesPlugin/FlipperKitDatabasesPlugin/Commands/*.h'
     ss.source_files = 'iOS/Plugins/FlipperKitDatabasesPlugin/FlipperKitDatabasesPlugin/**/**/*.{h,mm,m}'
-    ss.private_header_files = 'iOS/Plugins/FlipperKitDatabasesPlugin/FlipperKitDatabasesPlugin/Commands/*.h',
-                            'iOS/Plugins/FlipperKitDatabasesPlugin/FlipperKitDatabasesPlugin/Mock/*.h'
+    # ss.private_header_files = 'iOS/Plugins/FlipperKitDatabasesPlugin/FlipperKitDatabasesPlugin/Commands/*.h',
+    #                         'iOS/Plugins/FlipperKitDatabasesPlugin/FlipperKitDatabasesPlugin/Mock/*.h'
     ss.pod_target_xcconfig = {"HEADER_SEARCH_PATHS" => "\"$(PODS_ROOT)\"/Headers/Private/FlipperKit/**", "ONLY_ACTIVE_ARCH": "YES"}
   end
 
